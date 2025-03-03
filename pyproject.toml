@@ -1,0 +1,32 @@
+[project]
+name = "dynamic-mast3r"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+    "einops>=0.8.1",
+    "gradio>=5.18.0",
+    "huggingface-hub[torch]>=0.22",
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.10.0",
+    "mediapy>=1.2.2",
+    "open3d>=0.19.0",
+    "opencv-python>=4.11.0.86",
+    "pyglet<2",
+    "pyqt6>=6.8.1",
+    "roma>=1.5.1",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.15.2",
+    "tensorboard>=2.18.0",
+    "tensorflow-cpu>=2.18.0",
+    "tensorflow-datasets>=4.9.7",
+    "tensorflow-graphics>=2021.12.3",
+    "torch>=2.6.0",
+    "torchvision>=0.21.0",
+    "tqdm>=4.67.1",
+    "trimesh>=4.6.3",
+]
+
+[tool.uv.workspace]
+members = ["help"]
