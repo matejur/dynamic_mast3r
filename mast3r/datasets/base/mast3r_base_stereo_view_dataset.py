@@ -15,6 +15,8 @@ from mast3r.datasets.utils.cropping import (
     gen_random_crops,
     in2d_rect,
     crop_to_homography,
+    crop_image_depthmap_corres,
+    rescale_image_depthmap_corres,
 )
 
 import mast3r.utils.path_to_dust3r  # noqa
@@ -29,7 +31,7 @@ from dust3r.utils.geometry import (
     geotrf,
     depthmap_to_camera_coordinates,
 )
-import dust3r.datasets.utils.cropping as cropping
+import dust3r.datasets.utils.cropping as dust3r_cropping
 
 
 class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
@@ -111,23 +113,21 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
 
         # high-quality Lanczos down-scaling
         target_resolution = np.array(resolution)
-        image, depthmap, corres, intrinsics = cropping.rescale_image_depthmap_corres(
+        image, depthmap, corres, intrinsics = rescale_image_depthmap_corres(
             image, depthmap, corres, intrinsics, target_resolution
         )
 
         # actual cropping (if necessary) with bilinear interpolation
         offset_factor = 0.5
-        intrinsics2 = cropping.camera_matrix_of_crop(
+        intrinsics2 = dust3r_cropping.camera_matrix_of_crop(
             intrinsics, image.size, resolution, offset_factor=offset_factor
         )
-        crop_bbox = cropping.bbox_from_intrinsics_in_out(
+        crop_bbox = dust3r_cropping.bbox_from_intrinsics_in_out(
             intrinsics, intrinsics2, resolution
         )
 
-        image, depthmap, corres, valid_corres, intrinsics2 = (
-            cropping.crop_image_depthmap_corres(
-                image, depthmap, corres, valid_corres, intrinsics, crop_bbox
-            )
+        image, depthmap, corres, valid_corres, intrinsics2 = crop_image_depthmap_corres(
+            image, depthmap, corres, valid_corres, intrinsics, crop_bbox
         )
 
         return image, depthmap, corres, valid_corres, intrinsics2
@@ -244,14 +244,16 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
             corres[:, 0] /= corres[:, 2]
             corres[:, 1] /= corres[:, 2]
             corres = corres[:, :2].astype(np.int32)
-            view["corres"] = corres
 
             valid = np.logical_and(
                 np.logical_and(0 <= corres[:, 0], corres[:, 0] < imsize[0]),
                 np.logical_and(0 <= corres[:, 1], corres[:, 1] < imsize[1]),
             )
 
+            corres[~valid] = 0
+
             view["valid_corres"] = valid
+            view["corres"] = corres
 
             depthmap2 = (
                 depthmap_to_camera_coordinates(view["depthmap"], K_old)[0] @ R[:, 2]
@@ -391,7 +393,6 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
             for key, val in view.items():
                 res, err_msg = is_good_type(key, val)
                 assert res, f"{err_msg} with {key}={val} for view {view_name(view)}"
-            K = view["camera_intrinsics"]
 
             # check shapes
             assert view["depthmap"].shape == view["img"].shape[1:]

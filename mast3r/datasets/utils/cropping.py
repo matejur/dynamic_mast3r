@@ -4,10 +4,17 @@
 # --------------------------------------------------------
 # cropping/match extraction
 # --------------------------------------------------------
+import cv2
 import numpy as np
 import mast3r.utils.path_to_dust3r  # noqa
 from dust3r.utils.device import to_numpy
 from dust3r.utils.geometry import inv, geotrf
+from dust3r.datasets.utils.cropping import (
+    ImageList,
+    camera_matrix_of_crop,
+    lanczos,
+    bicubic,
+)
 
 
 def reciprocal_1d(corres_1_to_2, corres_2_to_1, ret_recip=False):
@@ -244,3 +251,76 @@ def in2d_rect(corres, crops):
     is_sup = corres[:, None] >= crops[None, :, 0:2]
     is_inf = corres[:, None] < crops[None, :, 2:4]
     return (is_sup & is_inf).all(axis=-1)
+
+
+def rescale_image_depthmap_corres(
+    image, depthmap, corres, camera_intrinsics, output_resolution, force=True
+):
+    """Jointly rescale a (image, depthmap)
+    so that (out_width, out_height) >= output_res
+    also rescales correspondances
+    """
+    image = ImageList(image)
+    input_resolution = np.array(image.size)  # (W,H)
+    output_resolution = np.array(output_resolution)
+    if depthmap is not None:
+        # can also use this with masks instead of depthmaps
+        assert tuple(depthmap.shape[:2]) == image.size[::-1]
+
+    # define output resolution
+    assert output_resolution.shape == (2,)
+    scale_final = max(output_resolution / image.size) + 1e-8
+    if scale_final >= 1 and not force:  # image is already smaller than what is asked
+        return (image.to_pil(), depthmap, camera_intrinsics)
+    output_resolution = np.floor(input_resolution * scale_final).astype(int)
+
+    # first rescale the image so that it contains the crop
+    image = image.resize(
+        output_resolution, resample=lanczos if scale_final < 1 else bicubic
+    )
+
+    # rescale correspondences
+    corres = corres * (output_resolution / input_resolution).astype(corres.dtype)
+
+    if depthmap is not None:
+        depthmap = cv2.resize(
+            depthmap,
+            output_resolution,
+            fx=scale_final,
+            fy=scale_final,
+            interpolation=cv2.INTER_NEAREST,
+        )
+
+    # no offset here; simple rescaling
+    camera_intrinsics = camera_matrix_of_crop(
+        camera_intrinsics, input_resolution, output_resolution, scaling=scale_final
+    )
+
+    return image.to_pil(), depthmap, corres, camera_intrinsics
+
+
+def crop_image_depthmap_corres(
+    image, depthmap, corres, valid_corres, camera_intrinsics, crop_bbox
+):
+    """
+    Return a crop of the input view, also cropping correspondences
+    """
+    image = ImageList(image)
+    l, t, r, b = crop_bbox  # noqa: E741
+
+    image = image.crop((l, t, r, b))
+    depthmap = depthmap[t:b, l:r]
+
+    camera_intrinsics = camera_intrinsics.copy()
+    camera_intrinsics[0, 2] -= l
+    camera_intrinsics[1, 2] -= t
+
+    # crop correspondences
+    corres = corres - np.array([l, t]).astype(corres.dtype)
+    corres_outside_view = np.logical_or(
+        np.logical_or(corres[:, 0] < 0, corres[:, 0] >= r - l),
+        np.logical_or(corres[:, 1] < 0, corres[:, 1] >= b - t),
+    )
+    valid_corres = valid_corres & ~corres_outside_view
+
+    return image.to_pil(), depthmap, corres, valid_corres, camera_intrinsics

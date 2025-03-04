@@ -154,6 +154,7 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         self.rgb_paths = [self.rgb_paths[i] for i in resampled_idxs]
         self.depth_paths = [self.depth_paths[i] for i in resampled_idxs]
         self.annotation_paths = [self.annotation_paths[i] for i in resampled_idxs]
+        self.mask_paths = [self.mask_paths[i] for i in resampled_idxs]
         self.full_idxs = [self.full_idxs[i] for i in resampled_idxs]
         self.sample_stride = [self.sample_stride[i] for i in resampled_idxs]
 
@@ -218,11 +219,11 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         edge = edge * keep
         edge = cv2.dilate(edge, kernel)
 
-        # x0, y0 = trajs[0, :, 0].astype(np.int32), trajs[0, :, 1].astype(np.int32)
-        # on_edge = edges[y0, x0] > 0
-        # trajs = trajs[:, ~on_edge]
-        # visibs = visibs[:, ~on_edge]
-        # valids = valids[:, ~on_edge]
+        x0, y0 = trajs[0, :, 0].astype(np.int32), trajs[0, :, 1].astype(np.int32)
+        on_edge = edge[y0, x0] > 0
+        trajs = trajs[:, ~on_edge]
+        visibs = visibs[:, ~on_edge]
+        valids = valids[:, ~on_edge]
 
         # update visibility annotations
         for si in range(S):

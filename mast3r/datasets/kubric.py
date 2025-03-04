@@ -150,8 +150,8 @@ class Kubric(MASt3RBaseStereoViewDataset):
         pts2 = pts2[vis_in_both]
 
         if len(pts1) < self.N:
-            valid = np.zeros(len(pts1), dtype=bool)
-            valid[: self.N] = True
+            valid = np.zeros(self.N, dtype=bool)
+            valid[: len(pts1)] = True
             pts1 = np.concatenate([pts1, np.zeros((self.N - len(pts1), 2))], axis=0)
             pts2 = np.concatenate([pts2, np.zeros((self.N - len(pts2), 2))], axis=0)
 
