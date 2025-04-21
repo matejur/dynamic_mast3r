@@ -22,7 +22,7 @@ class Kubric(MASt3RBaseStereoViewDataset):
         root,
         split,
         n_corres=32,
-        strides=[1, 2, 4, 8, 16],
+        strides=[1, 2, 3, 4, 5, 6, 7, 8, 9],
         dist_type="linear_1_2",
         quick=False,
         verbose=False,

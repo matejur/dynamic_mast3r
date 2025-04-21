@@ -260,6 +260,12 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
             if self.verbose:
                 print("N=%d; ideally we want N=%d, but we will pad" % (N, self.N))
 
+        if N == 0:
+            corres = np.zeros([self.S, self.N, 2])
+            valid_corres = np.zeros(self.N, dtype=bool)
+
+            return corres, valid_corres
+
         # even out the distribution, across initial positions and velocities
         # fps based on xy0 and mean motion
         xym = np.concatenate(
@@ -269,11 +275,6 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         trajs = trajs[:, inds]
         visibs = visibs[:, inds]
         valids = valids[:, inds]
-
-        # we won't supervise with the extremes, but let's clamp anyway just to be safe
-        trajs = np.minimum(
-            np.maximum(trajs, np.array([-64, -64])), np.array([W + 64, H + 64])
-        )  # S,N,2
 
         N = trajs.shape[1]
         N_ = min(N, self.N)
@@ -358,6 +359,9 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
                     instance=osp.split(rgb_paths[i])[1],
                 )
             )
+
+        if valid_corres.sum() == 0:
+            print("No valid corres, stride:", self.sample_stride[index])
 
         views[0]["valid_corres"] = valid_corres
         views[1]["valid_corres"] = valid_corres

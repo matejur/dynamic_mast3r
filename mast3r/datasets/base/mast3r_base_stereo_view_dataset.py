@@ -243,7 +243,7 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
             corres = corres @ matrix.T.astype(corres.dtype)
             corres[:, 0] /= corres[:, 2]
             corres[:, 1] /= corres[:, 2]
-            corres = corres[:, :2].astype(np.int32)
+            corres = np.round(corres[:, :2]).astype(np.int32)
 
             valid = np.logical_and(
                 np.logical_and(0 <= corres[:, 0], corres[:, 0] < imsize[0]),

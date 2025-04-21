@@ -159,7 +159,17 @@ class Regr3D_ShiftInv (Regr3D):
         pred_z2 -= pred_shift_z
 
         # monitoring = dict(monitoring, gt_shift_z=gt_shift_z.mean().detach(), pred_shift_z=pred_shift_z.mean().detach())
-        return gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, sky1, sky2, monitoring
+        return (
+            gt_pts1,
+            gt_pts2,
+            pred_pts1,
+            pred_pts2,
+            mask1,
+            mask2,
+            sky1,
+            sky2,
+            monitoring,
+        )
 
 
 class Regr3D_ScaleInv (Regr3D):
