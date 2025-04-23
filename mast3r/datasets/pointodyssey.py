@@ -30,9 +30,11 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         dist_type="linear_1_2",
         quick=False,
         verbose=False,
+        corres_as_float=True,
         *args,
         **kwargs,
     ):
+        kwargs["corres_as_float"] = corres_as_float
         super().__init__(*args, **kwargs)
 
         self.dataset_label = "pointodyssey"
@@ -362,6 +364,7 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
 
         if valid_corres.sum() == 0:
             print("No valid corres, stride:", self.sample_stride[index])
+            print("instance",osp.split(rgb_paths[i])[1])
 
         views[0]["valid_corres"] = valid_corres
         views[1]["valid_corres"] = valid_corres

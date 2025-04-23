@@ -26,9 +26,11 @@ class Kubric(MASt3RBaseStereoViewDataset):
         dist_type="linear_1_2",
         quick=False,
         verbose=False,
+        corres_as_float=True,
         *args,
         **kwargs,
     ):
+        kwargs["corres_as_float"] = corres_as_float
         super().__init__(*args, **kwargs)
 
         self.dataset_label = "panning_movi_e"
@@ -152,8 +154,8 @@ class Kubric(MASt3RBaseStereoViewDataset):
         if len(pts1) < self.N:
             valid = np.zeros(self.N, dtype=bool)
             valid[: len(pts1)] = True
-            pts1 = np.concatenate([pts1, np.zeros((self.N - len(pts1), 2))], axis=0)
-            pts2 = np.concatenate([pts2, np.zeros((self.N - len(pts2), 2))], axis=0)
+            pts1 = np.concatenate([pts1, np.zeros((self.N - len(pts1), 2))], axis=0, dtype=np.float32)
+            pts2 = np.concatenate([pts2, np.zeros((self.N - len(pts2), 2))], axis=0, dtype=np.float32)
 
             return [pts1, pts2], valid
 
@@ -182,11 +184,11 @@ class Kubric(MASt3RBaseStereoViewDataset):
             rgb_image = imread_cv2(rgb_paths[i])
             depthmap = imread_cv2(depth_paths[i], options=cv2.IMREAD_ANYDEPTH)
             depthmap = depthmap / 65535 * (max_depth - min_depth) + min_depth
+            depthmap = depthmap.astype(np.float32)
 
             idx = full_idx[i]
             intrinsics = camera["intrinsics"]
             camera_pose = camera["matrix_world"][idx]
-
             rgb_image, depthmap, corres, valid_corres, intrinsics = (
                 self._crop_resize_if_necessary(
                     rgb_image,
