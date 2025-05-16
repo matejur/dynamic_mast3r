@@ -66,3 +66,28 @@ class AsymmetricMASt3R(AsymmetricCroCo3DStereo):
         # magic wrapper
         self.head1 = transpose_to_landscape(self.downstream_head1, activate=landscape_only)
         self.head2 = transpose_to_landscape(self.downstream_head2, activate=landscape_only)
+
+    def encode_images(self, images):
+        assert images.ndim == 4, "images must be a 4D tensor (B, C, H, W)"
+
+        B = images.shape[0]
+        shape = torch.tensor(images.shape[-2:])[None].repeat(B, 1)
+        x, pos = self.patch_embed(images, true_shape=shape)
+
+        assert self.enc_pos_embed is None
+
+        for blk in self.enc_blocks:
+            x = blk(x, pos)
+
+        x = self.enc_norm(x)
+        return x, pos
+    
+    def decode_and_heads(self, feat1, pos1, feat2, pos2, shape):
+        dec1, dec2 = self._decoder(feat1, pos1, feat2, pos2)
+
+        with torch.cuda.amp.autocast(enabled=False):
+            res1 = self._downstream_head(1, [tok.float() for tok in dec1], shape)
+            res2 = self._downstream_head(2, [tok.float() for tok in dec2], shape)
+
+        res2['pts3d_in_other_view'] = res2.pop('pts3d')  # predict view2's pts3d in view1's frame
+        return res1, res2
