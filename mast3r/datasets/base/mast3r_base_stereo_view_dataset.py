@@ -38,7 +38,6 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
     def __init__(
         self,
         *,  # only keyword arguments
-        corres_as_float=False,
         split=None,
         resolution=None,  # square_size or (width, height) or list of [(width,height), ...]
         transform=ImgNorm,
@@ -65,7 +64,6 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
         self.aug_monocular = aug_monocular
         self.aug_portrait_or_landscape = aug_portrait_or_landscape
         self.aug_rot90 = aug_rot90
-        self.corres_as_float = corres_as_float
 
         self.n_corres = n_corres
         self.nneg = nneg
@@ -246,11 +244,7 @@ class MASt3RBaseStereoViewDataset(BaseStereoViewDataset):
             corres[:, 0] /= corres[:, 2]
             corres[:, 1] /= corres[:, 2]
             corres = corres[:, :2]
-
-            if self.corres_as_float:
-                corres = corres.astype(np.float32)
-            else:
-                corres = np.round(corres).astype(np.int32)
+            corres = np.round(corres).astype(np.int32)
 
             valid = np.logical_and(
                 np.logical_and(0 <= corres[:, 0], corres[:, 0] < imsize[0] - 1),

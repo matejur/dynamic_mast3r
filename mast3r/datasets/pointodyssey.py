@@ -13,7 +13,7 @@ import numpy as np
 
 import mast3r.utils.path_to_dust3r  # noqa
 from dust3r.utils.image import imread_cv2
-from .utils import get_stride_distribution, farthest_point_sample_py
+from .utils import farthest_point_sample_py
 from mast3r.datasets.base.mast3r_base_stereo_view_dataset import (
     MASt3RBaseStereoViewDataset,
 )
@@ -25,16 +25,13 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         root,
         split,
         n_corres=32,
-        strides=[1, 2, 4, 8, 16],
+        maximum_stride=10,
         clip_step=2,
-        dist_type="linear_1_2",
         quick=False,
         verbose=False,
-        corres_as_float=True,
         *args,
         **kwargs,
     ):
-        kwargs["corres_as_float"] = corres_as_float
         super().__init__(*args, **kwargs)
 
         self.dataset_label = "pointodyssey"
@@ -42,22 +39,20 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         self.S = 2  # 2 views
         self.N = n_corres  # min num points
         self.verbose = verbose
+        self.maximum_stride = maximum_stride
 
-        self.rgb_paths = []
-        self.depth_paths = []
-        self.traj_paths = []
-        self.annotation_paths = []
+        self.base_paths = []
+        self.sample_indexes = []
+        self.tracks_path = []
         self.full_idxs = []
         self.sample_stride = []
-        self.mask_paths = []
-        self.strides = strides
 
         self.subdirs = []
         self.sequences = []
-        self.subdirs.append(os.path.join(root, split))
+        self.subdirs.append(osp.join(root, split))
 
         for subdir in self.subdirs:
-            for seq in glob.glob(os.path.join(subdir, "*/")):
+            for seq in glob.glob(osp.join(subdir, "*/")):
                 self.sequences.append(seq)
 
         self.sequences = sorted(self.sequences)
@@ -74,94 +69,24 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         if quick:
             self.sequences = self.sequences[1:2]
 
-        for seq in self.sequences:
+        for base_path in self.sequences:
             if self.verbose:
-                print("seq", seq)
-
-            rgb_path = os.path.join(seq, "rgbs")
+                print(f"seq {base_path}")
 
             annotations_path = os.path.join(seq, "anno.npz")
             if os.path.isfile(annotations_path):
-                for stride in strides:
-                    for ii in range(
-                        0, len(os.listdir(rgb_path)) - self.S * stride + 1, clip_step
-                    ):
-                        full_idx = ii + np.arange(self.S) * stride
-                        self.rgb_paths.append(
-                            [
-                                os.path.join(seq, "rgbs", "rgb_%05d.jpg" % idx)
-                                for idx in full_idx
-                            ]
-                        )
-                        self.depth_paths.append(
-                            [
-                                os.path.join(seq, "depths", "depth_%05d.png" % idx)
-                                for idx in full_idx
-                            ]
-                        )
-                        self.annotation_paths.append(
-                            [
-                                os.path.join(seq, "annotations", "anno_%05d.npz" % idx)
-                                for idx in full_idx
-                            ]
-                        )
-                        self.mask_paths.append(
-                            [
-                                os.path.join(seq, "masks", "mask_%05d.png" % idx)
-                                for idx in full_idx
-                            ]
-                        )
-                        self.full_idxs.append(full_idx)
-                        self.sample_stride.append(stride)
-                    if self.verbose:
-                        sys.stdout.write(".")
-                        sys.stdout.flush()
+                video_length = len(os.listdir(osp.join(base_path, "rgbs")))
+
+                for i in range(1, video_length, clip_step):
+                    self.base_paths.append(base_path)
+                    self.sample_indexes.append(i)
             else:
                 print("missing annotations:", annotations_path)
 
-        self.stride_counts = {}
-        self.stride_idxs = {}
-        for stride in strides:
-            self.stride_counts[stride] = 0
-            self.stride_idxs[stride] = []
-        for i, stride in enumerate(self.sample_stride):
-            self.stride_counts[stride] += 1
-            self.stride_idxs[stride].append(i)
-        print("stride counts:", self.stride_counts)
-
-        if len(strides) > 1 and dist_type is not None:
-            self._resample_clips(strides, dist_type)
-
-        print(
-            "collected %d clips of length %d in %s (dset=%s)"
-            % (len(self.rgb_paths), self.S, root, split)
-        )
-
-    def _resample_clips(self, strides, dist_type):
-        # Get distribution of strides, and sample based on that
-        dist = get_stride_distribution(strides, dist_type=dist_type)
-        dist = dist / np.max(dist)
-        max_num_clips = self.stride_counts[strides[np.argmax(dist)]]
-        num_clips_each_stride = [
-            min(self.stride_counts[stride], int(dist[i] * max_num_clips))
-            for i, stride in enumerate(strides)
-        ]
-        print("resampled_num_clips_each_stride:", num_clips_each_stride)
-        resampled_idxs = []
-        for i, stride in enumerate(strides):
-            resampled_idxs += np.random.choice(
-                self.stride_idxs[stride], num_clips_each_stride[i], replace=False
-            ).tolist()
-
-        self.rgb_paths = [self.rgb_paths[i] for i in resampled_idxs]
-        self.depth_paths = [self.depth_paths[i] for i in resampled_idxs]
-        self.annotation_paths = [self.annotation_paths[i] for i in resampled_idxs]
-        self.mask_paths = [self.mask_paths[i] for i in resampled_idxs]
-        self.full_idxs = [self.full_idxs[i] for i in resampled_idxs]
-        self.sample_stride = [self.sample_stride[i] for i in resampled_idxs]
+        print(f"Found {len(self.base_paths)} candidates in {root} (dset={split})")
 
     def __len__(self):
-        return len(self.rgb_paths)
+        return len(self.sample_indexes)
 
     def get_corres(self, annot1, annot2, mask):
         trajs = np.stack([annot1["trajs_2d"], annot2["trajs_2d"]], axis=0)
@@ -295,10 +220,30 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         return trajs_full, valid_corres.astype(bool)
 
     def _get_views(self, index, resolution, rng):
-        rgb_paths = self.rgb_paths[index]
-        mask_paths = self.mask_paths[index]
-        depth_paths = self.depth_paths[index]
-        annotations_path = self.annotation_paths[index]
+        base_path = self.base_paths[index]
+        sample_index = self.sample_indexes[index]
+
+        lower = max(0, sample_index - self.maximum_stride)
+        pair_index = np.random.randint(lower, sample_index)
+        full_idx = [pair_index, sample_index]
+        print(sample_index - pair_index)
+
+        rgb_paths = [
+            osp.join(base_path, "rgbs", f"rgb_{full_idx[0]:05d}.jpg"),
+            osp.join(base_path, "rgbs", f"rgb_{full_idx[1]:05d}.jpg"),
+        ]
+        depth_paths = [
+            osp.join(base_path, "depths", f"depth_{full_idx[0]:05d}.png"),
+            osp.join(base_path, "depths", f"depth_{full_idx[1]:05d}.png"),
+        ]
+        mask_paths = [
+            osp.join(base_path, "masks", f"mask_{full_idx[0]:05d}.png"),
+            osp.join(base_path, "masks", f"mask_{full_idx[1]:05d}.png"),
+        ]
+        annotations_path = [
+            osp.join(base_path, "annotations", f"anno_{full_idx[0]:05d}.npz"),
+            osp.join(base_path, "annotations", f"anno_{full_idx[1]:05d}.npz"),
+        ]
 
         if not os.path.exists(annotations_path[0]):
             raise ValueError(

@@ -3,14 +3,13 @@
 
 import os
 import cv2
-import sys
 import glob
 import numpy as np
 import os.path as osp
 
 import mast3r.utils.path_to_dust3r  # noqa
 from dust3r.utils.image import imread_cv2
-from .utils import get_stride_distribution, farthest_point_sample_py
+from .utils import farthest_point_sample_py
 from mast3r.datasets.base.mast3r_base_stereo_view_dataset import (
     MASt3RBaseStereoViewDataset,
 )
@@ -22,15 +21,12 @@ class Kubric(MASt3RBaseStereoViewDataset):
         root,
         split,
         n_corres=32,
-        strides=[1, 2, 3, 4, 5, 6, 7, 8, 9],
-        dist_type="linear_1_2",
+        maximum_stride=32,
         quick=False,
         verbose=False,
-        corres_as_float=True,
         *args,
         **kwargs,
     ):
-        kwargs["corres_as_float"] = corres_as_float
         super().__init__(*args, **kwargs)
 
         self.dataset_label = "panning_movi_e"
@@ -38,16 +34,13 @@ class Kubric(MASt3RBaseStereoViewDataset):
         self.S = 2  # 2 views
         self.N = n_corres  # min num points
         self.verbose = verbose
+        self.maximum_stride = maximum_stride
 
-        self.rgb_paths = []
-        self.depth_paths = []
-        self.traj_paths = []
+        self.base_paths = []
+        self.sample_indexes = []
         self.tracks_path = []
-        self.camera_path = []
         self.full_idxs = []
         self.sample_stride = []
-        self.mask_paths = []
-        self.strides = strides
 
         self.subdirs = []
         self.sequences = []
@@ -68,74 +61,21 @@ class Kubric(MASt3RBaseStereoViewDataset):
         if quick:
             self.sequences = self.sequences[1:2]
 
-        for seq in self.sequences:
+        for base_path in self.sequences:
             if self.verbose:
-                print(f"seq {seq}")
+                print(f"seq {base_path}")
 
-            rgb_path = osp.join(seq, "rgbs")
+            video_length = len(os.listdir(osp.join(base_path, "rgbs")))
 
-            for stride in strides:
-                for ii in range(0, len(os.listdir(rgb_path)) - stride, 1):
-                    full_idx = ii + np.arange(self.S) * stride
-                    self.rgb_paths.append(
-                        [osp.join(seq, "rgbs", f"{idx:02d}.jpg") for idx in full_idx]
-                    )
-                    self.depth_paths.append(
-                        [osp.join(seq, "depths", f"{idx:02d}.png") for idx in full_idx]
-                    )
-                    self.mask_paths.append(
-                        [osp.join(seq, "masks", f"{idx:02d}.png") for idx in full_idx]
-                    )
-                    self.tracks_path.append(osp.join(seq, "tracks.npz"))
-                    self.camera_path.append(osp.join(seq, "camera.npz"))
-                    self.full_idxs.append(full_idx)
-                    self.sample_stride.append(stride)
-                if self.verbose:
-                    sys.stdout.write(".")
-                    sys.stdout.flush()
+            for i in range(1, video_length):
+                self.base_paths.append(base_path)
+                self.sample_indexes.append(i)
 
-        self.stride_counts = {}
-        self.stride_idxs = {}
-        for stride in strides:
-            self.stride_counts[stride] = 0
-            self.stride_idxs[stride] = []
-        for i, stride in enumerate(self.sample_stride):
-            self.stride_counts[stride] += 1
-            self.stride_idxs[stride].append(i)
-        print("stride counts:", self.stride_counts)
+        print(f"Found {len(self.base_paths)} candidates in {root} (dset={split})")
 
-        if len(strides) > 1 and dist_type is not None:
-            self._resample_clips(strides, dist_type)
-
-        print(
-            f"collected {len(self.rgb_paths)} clips of length {self.S} in {root} (dset={split})"
-        )
 
     def __len__(self):
-        return len(self.rgb_paths)
-
-    def _resample_clips(self, strides, dist_type):
-        # Get distribution of strides, and sample based on that
-        dist = get_stride_distribution(strides, dist_type=dist_type)
-        dist = dist / np.max(dist)
-        max_num_clips = self.stride_counts[strides[np.argmax(dist)]]
-        num_clips_each_stride = [
-            min(self.stride_counts[stride], int(dist[i] * max_num_clips))
-            for i, stride in enumerate(strides)
-        ]
-        print("resampled_num_clips_each_stride:", num_clips_each_stride)
-        resampled_idxs = []
-        for i, stride in enumerate(strides):
-            resampled_idxs += np.random.choice(
-                self.stride_idxs[stride], num_clips_each_stride[i], replace=False
-            ).tolist()
-
-        self.rgb_paths = [self.rgb_paths[i] for i in resampled_idxs]
-        self.depth_paths = [self.depth_paths[i] for i in resampled_idxs]
-        self.camera_path = [self.camera_path[i] for i in resampled_idxs]
-        self.tracks_path = [self.tracks_path[i] for i in resampled_idxs]
-        self.full_idxs = [self.full_idxs[i] for i in resampled_idxs]
-        self.sample_stride = [self.sample_stride[i] for i in resampled_idxs]
+        return len(self.sample_indexes)
 
     def get_corres(self, trajs, idxs):
         points = trajs["target_points"]
@@ -167,12 +107,24 @@ class Kubric(MASt3RBaseStereoViewDataset):
         return [pts1, pts2], valid
 
     def _get_views(self, idx, resolution, rng):
-        rgb_paths = self.rgb_paths[idx]
-        depth_paths = self.depth_paths[idx]
-        camera_path = self.camera_path[idx]
-        tracks_path = self.tracks_path[idx]
-        masks_path = self.mask_paths[idx]  # READ WITH PIL?
-        full_idx = self.full_idxs[idx]
+        base_path = self.base_paths[idx]
+        sample_index = self.sample_indexes[idx]
+        
+        tracks_path = osp.join(base_path, "tracks.npz")
+        camera_path = osp.join(base_path, "camera.npz")
+
+        lower = max(0, sample_index - self.maximum_stride)
+        pair_index = np.random.randint(lower, sample_index)
+        full_idx = [pair_index, sample_index]
+
+        rgb_paths = [
+            osp.join(base_path, "rgbs", f"{full_idx[0]:02d}.jpg"),
+            osp.join(base_path, "rgbs", f"{full_idx[1]:02d}.jpg"),
+        ]
+        depth_paths = [
+            osp.join(base_path, "depths", f"{full_idx[0]:02d}.png"),
+            osp.join(base_path, "depths", f"{full_idx[1]:02d}.png"),
+        ]
 
         trajs = np.load(tracks_path)
         all_corres, valid_corres = self.get_corres(trajs, full_idx)
