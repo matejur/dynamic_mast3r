@@ -226,7 +226,6 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         lower = max(0, sample_index - self.maximum_stride)
         pair_index = np.random.randint(lower, sample_index)
         full_idx = [pair_index, sample_index]
-        print(sample_index - pair_index)
 
         rgb_paths = [
             osp.join(base_path, "rgbs", f"rgb_{full_idx[0]:05d}.jpg"),
