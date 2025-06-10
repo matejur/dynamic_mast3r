@@ -43,9 +43,6 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
 
         self.base_paths = []
         self.sample_indexes = []
-        self.tracks_path = []
-        self.full_idxs = []
-        self.sample_stride = []
 
         self.subdirs = []
         self.sequences = []
@@ -226,7 +223,6 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
         lower = max(0, sample_index - self.maximum_stride)
         pair_index = np.random.randint(lower, sample_index)
         full_idx = [pair_index, sample_index]
-        print(sample_index - pair_index)
 
         rgb_paths = [
             osp.join(base_path, "rgbs", f"rgb_{full_idx[0]:05d}.jpg"),
@@ -307,9 +303,6 @@ class PointOdyssey(MASt3RBaseStereoViewDataset):
                 )
             )
 
-        if valid_corres.sum() == 0:
-            print("No valid corres, stride:", self.sample_stride[index])
-            print("instance",osp.split(rgb_paths[i])[1])
 
         views[0]["valid_corres"] = valid_corres
         views[1]["valid_corres"] = valid_corres

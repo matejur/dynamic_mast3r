@@ -38,9 +38,6 @@ class Kubric(MASt3RBaseStereoViewDataset):
 
         self.base_paths = []
         self.sample_indexes = []
-        self.tracks_path = []
-        self.full_idxs = []
-        self.sample_stride = []
 
         self.subdirs = []
         self.sequences = []
