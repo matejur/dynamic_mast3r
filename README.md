@@ -2,6 +2,7 @@
 
 This repository contains small changes to the original [MASt3R](https://github.com/naver/mast3r) for training on dynamic scenes.
 It is then used for point tracking as part of my master's thesis and not really on its own.
+Check out the main repository at https://github.com/matejur/point-tracking-master-thesis.
 
 ## Get started
 
@@ -43,7 +44,7 @@ Depending on the PyTorch version, you may need to add the `weights_only=False` t
 
 ## Evaluation
 
-This model is not evaluated on its own, check TODO
+This model is not evaluated on its own, check the main repository https://github.com/matejur/point-tracking-master-thesis.
 
 ## Acknowledgement
 
